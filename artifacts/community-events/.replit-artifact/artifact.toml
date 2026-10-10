@@ -1,0 +1,32 @@
+kind = "web"
+previewPath = "/"
+title = "Civic · Community Events"
+description = "Local event discovery, personalized feeds, saved reminders and event card designs, with secure administrator event management."
+version = "1.0.0"
+id = "artifacts/community-events"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/", "/api" ]
+localPort = 25852
+
+[services.development]
+run = "pnpm --filter @workspace/community-events run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/community-events", "run", "build" ]
+
+[services.production.run]
+args = [ "pnpm", "--filter", "@workspace/community-events", "run", "serve" ]
+
+[services.production.run.env]
+PORT = "25852"
+NODE_ENV = "production"
+
+[services.production.health.startup]
+path = "/api/healthz"
+
+[services.env]
+PORT = "25852"
+BASE_PATH = "/"

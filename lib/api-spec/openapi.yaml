@@ -1,36 +1,391 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: Civic Community Events JSON API. Cookie browser sessions and verified bearer tokens share the same services.
 servers:
   - url: /api
-    description: Base API path
-tags:
-  - name: health
-    description: Health operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
-      tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/HealthStatus"
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /auth/signup:
+    post:
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "201":
+          description: Signed in as a new visitor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Credentials" }
+      responses:
+        "200":
+          description: JWT returned for API clients and HttpOnly cookie set for browsers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+  /auth/logout:
+    post:
+      operationId: logout
+      responses:
+        "200":
+          description: Browser cookie cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageResponse" }
+  /auth/me:
+    get:
+      operationId: getMe
+      responses:
+        "200":
+          description: Safe current identity or null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeResponse" }
+  /events:
+    get:
+      operationId: listEvents
+      parameters:
+        - { name: category, in: query, schema: { $ref: "#/components/schemas/Category" } }
+        - { name: city, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 30, default: 9 } }
+      responses:
+        "200":
+          description: Filtered active upcoming events, nearest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+  /events/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getEvent
+      responses:
+        "200":
+          description: Active upcoming event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+  /events/meta:
+    get:
+      operationId: getEventMeta
+      responses:
+        "200":
+          description: Cities and category counts for upcoming active events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventMeta" }
+  /admin/events:
+    get:
+      operationId: listAdminEvents
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 30, default: 30 } }
+      responses:
+        "200":
+          description: Admin only, including past and inactive events
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+    post:
+      operationId: createEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventInput" }
+      responses:
+        "201":
+          description: Created event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+  /admin/events/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAdminEvent
+      responses:
+        "200":
+          description: Admin event for editing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+    patch:
+      operationId: updateEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventUpdate" }
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventResponse" }
+  /favourites:
+    get:
+      operationId: getFavourites
+      responses:
+        "200":
+          description: Saved categories
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Favourites" }
+    put:
+      operationId: saveFavourites
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Favourites" }
+      responses:
+        "200":
+          description: Persisted categories
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Favourites" }
+  /feed:
+    get:
+      operationId: getFeed
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 30, default: 9 } }
+      responses:
+        "200":
+          description: Upcoming active events in saved categories
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventPage" }
+  /reminders:
+    get:
+      operationId: getReminders
+      responses:
+        "200":
+          description: Saved upcoming event reminders
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReminderList" }
+  /events/{id}/reminder:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: saveReminder
+      responses:
+        "200":
+          description: Idempotent reminder save
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReminderState" }
+    delete:
+      operationId: removeReminder
+      responses:
+        "200":
+          description: Idempotent removal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReminderState" }
+  /events/{id}/card-design:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getCardDesign
+      responses:
+        "200":
+          description: Saved design or the default design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardDesign" }
+    put:
+      operationId: saveCardDesign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardDesignInput" }
+      responses:
+        "200":
+          description: Persisted design
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardDesign" }
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
+    Category:
+      type: string
+      enum: [MUSIC, WORKSHOP, FOOD, SPORTS, KIDS]
+    Theme:
+      type: string
+      enum: [warm-atelier, midnight-indigo, botanical]
+    Sticker:
+      type: string
+      enum: [vinyl, coldbrew, spark, flower, ticket]
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10, maxLength: 72 }
+    User:
+      type: object
+      required: [id, email, role]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { type: string, enum: [USER, ADMIN] }
+    AuthResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [user, token]
+          properties:
+            user: { $ref: "#/components/schemas/User" }
+            token: { type: string }
+    MeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          oneOf:
+            - { $ref: "#/components/schemas/User" }
+            - { type: "null" }
+    MessageResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { type: object, required: [message], properties: { message: { type: string } } }
+    Event:
+      type: object
+      required: [id, title, category, city, startsAt, price, description, imageUrl, isActive, createdAt, updatedAt, hasReminder]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        category: { $ref: "#/components/schemas/Category" }
+        city: { type: string }
+        startsAt: { type: string, format: date-time }
+        price: { type: string, description: Exact decimal rupee amount }
+        description: { type: string }
+        imageUrl: { type: [string, "null"] }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        hasReminder: { type: boolean }
+    EventInput:
+      type: object
+      required: [title, category, city, startsAt, price, description]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        category: { $ref: "#/components/schemas/Category" }
+        city: { type: string, minLength: 2, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        price: { type: string, description: Nonnegative decimal rupees, max two fractional digits }
+        description: { type: string, minLength: 10, maxLength: 4000 }
+        imageUrl: { type: [string, "null"] }
+        isActive: { type: boolean, default: true }
+    EventUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        category: { $ref: "#/components/schemas/Category" }
+        city: { type: string, minLength: 2, maxLength: 80 }
+        startsAt: { type: string, format: date-time }
+        price: { type: string }
+        description: { type: string, minLength: 10, maxLength: 4000 }
+        imageUrl: { type: [string, "null"] }
+        isActive: { type: boolean }
+        updatedAt: { type: string, format: date-time, description: Optional optimistic concurrency check }
+    EventResponse:
+      type: object
+      required: [data]
+      properties:
+        data: { $ref: "#/components/schemas/Event" }
+    EventPage:
+      type: object
+      required: [data, pagination]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Event" } }
+        pagination:
+          type: object
+          required: [page, pageSize, total, totalPages]
+          properties:
+            page: { type: integer }
+            pageSize: { type: integer }
+            total: { type: integer }
+            totalPages: { type: integer }
+    CategoryCount:
+      type: object
+      required: [category, count]
+      properties:
+        category: { $ref: "#/components/schemas/Category" }
+        count: { type: integer }
+    EventMeta:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [cities, categories, total]
+          properties:
+            cities: { type: array, items: { type: string } }
+            categories: { type: array, items: { $ref: "#/components/schemas/CategoryCount" } }
+            total: { type: integer }
+    Favourites:
+      type: object
+      required: [categories]
+      properties:
+        categories: { type: array, maxItems: 5, uniqueItems: true, items: { $ref: "#/components/schemas/Category" } }
+    ReminderList:
+      type: object
+      required: [data]
+      properties:
+        data: { type: array, items: { $ref: "#/components/schemas/Event" } }
+    ReminderState:
+      type: object
+      required: [eventId, hasReminder]
+      properties:
+        eventId: { type: string }
+        hasReminder: { type: boolean }
+    CardDesignInput:
+      type: object
+      required: [theme, stickers]
+      properties:
+        theme: { $ref: "#/components/schemas/Theme" }
+        stickers: { type: array, maxItems: 3, uniqueItems: true, items: { $ref: "#/components/schemas/Sticker" } }
+    CardDesign:
+      type: object
+      required: [eventId, theme, stickers, updatedAt]
+      properties:
+        eventId: { type: string }
+        theme: { $ref: "#/components/schemas/Theme" }
+        stickers: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/Sticker" } }
+        updatedAt: { type: [string, "null"] }
 

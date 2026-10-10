@@ -1,0 +1,725 @@
+# ROLE
+
+Act as a Senior Full-Stack Architect, Next.js App Router Engineer, PostgreSQL Database Engineer, Application Security Engineer, QA Engineer, and technical delivery lead.
+
+You are responsible for completing the FyerX **Community Events Board** assessment end to end.
+
+Operate as a disciplined coding agent: inspect the repository, plan the work, implement in small verifiable phases, test changes, review security, document decisions, and commit and push completed phases to GitHub when the remote and authentication are available.
+
+Do not merely generate a plan or output example code. Work in the repository and verify the implementation.
+
+# 1. ASSESSMENT OBJECTIVE
+
+Build a small, polished, responsive application where an administrator manages local events and visitors discover upcoming events, create accounts, select favourite categories, access a personalized feed, save reminders, and personalize event cards.
+
+The assessment explicitly prioritizes quality over a rushed feature list. Keep the solution focused on the stated requirements.
+
+Expected implementation time is approximately four to five hours. Make sensible decisions independently, avoid unnecessary clarification, and prioritize a complete, explainable implementation over architectural complexity.
+
+# 2. MANDATORY TECHNOLOGY STACK
+
+Use the following stack:
+
+- Next.js App Router with a currently supported, compatible stable release.
+- TypeScript with strict mode enabled.
+- PostgreSQL as the database.
+- Prisma ORM for schema management, queries, and migrations.
+- Tailwind CSS and shadcn/ui for the interface.
+- Zod for request and form validation.
+- bcrypt or bcryptjs for password hashing, with a suitably configured work factor.
+- A maintained JWT library, such as `jose`, for token signing and verification.
+- React Server Components by default; Client Components only when browser interaction requires them.
+- Vitest or an equivalent lightweight test setup for unit/integration tests; Playwright for a small set of critical browser flows if feasible.
+
+Use compatible, stable package versions. Check the existing lockfile and repository before changing dependencies. Do not introduce NestJS, a separate Express server, MongoDB, Redis, microservices, or paid services.
+
+Use npm unless the existing repository already uses another package manager.
+
+# 3. NON-NEGOTIABLE ARCHITECTURE
+
+Use a single Next.js application with the App Router and a clean separation between:
+
+- UI and presentation components.
+- Server-only application services.
+- Authentication and authorization.
+- Validation schemas.
+- Database access.
+- Route Handlers implementing JSON APIs.
+- Shared types and formatting utilities.
+
+Suggested structure:
+
+- `src/app/` — pages, layouts, and API Route Handlers.
+- `src/components/` — shared UI and feature components.
+- `src/lib/auth/` — password hashing, JWT verification, session helpers, authorization.
+- `src/lib/db/` — Prisma client.
+- `src/lib/validations/` — Zod schemas.
+- `src/lib/services/` — business logic and database operations.
+- `src/lib/utils/` — formatting and shared utilities.
+- `prisma/schema.prisma` — database schema.
+- `prisma/seed.ts` — reproducible sample data.
+- `tests/` — automated tests.
+- `docs/` — architecture, security, UI, and interviewer notes.
+
+Adapt the structure when appropriate, but preserve separation of concerns.
+
+Every required web feature must communicate with the application's own JSON APIs for authentication, events, feed, favourites, reminders, and card design. The browser must not directly access PostgreSQL or call an external mock backend.
+
+Use the same JSON API contracts for future web or mobile clients.
+
+Do not create a separate API service, a generic repository abstraction for every model, or unnecessary layers that make this small application harder to explain.
+
+# 4. DATABASE DESIGN
+
+Use PostgreSQL and Prisma.
+
+Create a normalized relational schema with the following logical entities.
+
+## User
+
+- `id`: UUID or another appropriate stable identifier.
+- `email`: unique, normalized email address.
+- `passwordHash`: password hash only, never plaintext.
+- `createdAt`, `updatedAt`.
+
+## Event
+
+- `id`: UUID or another appropriate stable identifier.
+- `title`.
+- `category`: enum with `MUSIC`, `WORKSHOP`, `FOOD`, `SPORTS`, `KIDS`.
+- `city`.
+- `startsAt`: PostgreSQL timestamp with timezone semantics.
+- `price`: a suitable decimal or integer representation that avoids floating-point currency errors.
+- `description`.
+- `imageUrl`: optional or nullable.
+- `isActive`: boolean.
+- `createdAt`, `updatedAt`.
+
+Store event times consistently in UTC and format them in the visitor's intended display timezone. Use `Asia/Kolkata` as the default display timezone unless the product behavior or existing project configuration specifies otherwise.
+
+## FavouriteCategory
+
+A relational join table connecting users to favourite event categories.
+
+- `userId`.
+- `category`.
+- Composite primary key or unique constraint on `(userId, category)`.
+
+## EventReminder
+
+A join table connecting users and events.
+
+- `userId`.
+- `eventId`.
+- `createdAt`.
+- Unique constraint on `(userId, eventId)`.
+
+Use this to make reminder operations idempotent and persistent.
+
+## EventCardDesign
+
+Persist the design for a particular user and event.
+
+- `userId`.
+- `eventId`.
+- `theme`: a validated theme identifier.
+- `stickers`: an array of validated sticker identifiers or an equivalent normalized representation.
+- `createdAt`, `updatedAt`.
+- Unique constraint on `(userId, eventId)`.
+
+If using a PostgreSQL array, enforce the three-sticker maximum and allowed identifiers in server-side application validation. Do not trust client-side constraints.
+
+Use foreign keys and appropriate delete/update behavior. Do not create unrelated tables or unnecessary fields.
+
+Use database enums or equivalent constraints where appropriate.
+
+# 5. ADMIN AUTHENTICATION AND AUTHORIZATION
+
+The assessment allows one hard-coded admin. Implement the simplest secure version.
+
+Use environment variables for:
+
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD_HASH`
+- `JWT_SECRET`
+- `DATABASE_URL`
+
+Never hard-code the admin password or JWT secret into committed source code.
+
+Generate and document a secure password-hash setup procedure. Seed or provision the admin safely; do not expose admin credentials in API responses, source code, browser bundles, logs, or Git history.
+
+A local development-only convenience is acceptable only if it is clearly isolated, safe by default, and documented.
+
+Admin authorization must be enforced inside every protected server Route Handler and server-side operation. Hiding admin links, checking a role only in a React component, or redirecting in middleware alone is insufficient.
+
+Use explicit server-side authorization such as `requireAdmin()` and `requireUser()`.
+
+Protect every admin operation, including listing events for administration, creating events, updating event details, and changing event status.
+
+Return appropriate HTTP status codes, such as 401 for unauthenticated requests, 403 for authenticated non-admin users, 400 or 422 for invalid input, and 404 for unavailable resources.
+
+Never allow a visitor to become an administrator by changing request JSON, URL parameters, cookies, or client-side state.
+
+If middleware or proxy-based routing is used, treat it only as an additional navigation guard—not the authorization boundary.
+
+# 6. VISITOR AUTHENTICATION AND JWT
+
+Implement email/password signup and login.
+
+Requirements:
+
+- Normalize and validate email addresses.
+- Hash passwords using bcrypt/bcryptjs with an appropriate work factor.
+- Enforce a reasonable minimum password length and a documented maximum.
+- Never store, return, or log plaintext passwords.
+- Use generic authentication errors that do not unnecessarily reveal account existence.
+- Sign JWTs using a strong secret from the environment, with an explicit algorithm, expiration, and relevant claims.
+- Verify signature, algorithm, expiration, and expected claims on the server.
+- Never trust a decoded but unverified JWT.
+- Do not store access tokens in `localStorage` or `sessionStorage`.
+
+The login JSON API must return a JWT token to satisfy the assessment's explicit requirement. Also establish an appropriate browser session using an `HttpOnly`, `Secure` in production, `SameSite` cookie.
+
+Keep the browser's authentication flow and the mobile/API token flow compatible with the same authentication service. Do not return the JWT secret, password hash, or unnecessary internal fields.
+
+For browser requests that rely on cookies, account for CSRF risk using an appropriate SameSite policy and Origin/CSRF validation for state-changing requests. Do not assume that `HttpOnly` alone prevents CSRF or XSS.
+
+If both bearer tokens and cookies are accepted, define an explicit precedence and verification policy. Never let an untrusted alternate credential override a valid security decision.
+
+Add lightweight rate limiting or an equivalent documented mitigation for login and signup if it can be implemented reliably within the project. Do not add a complex infrastructure dependency solely for this purpose.
+
+# 7. API CONTRACT
+
+Implement versionable, predictable JSON endpoints using Next.js Route Handlers.
+
+Use consistent success/error response shapes, correct HTTP status codes, request validation, and explicit response DTOs.
+
+Implement at least the following endpoints. The exact HTTP method and path can be adjusted to a consistent REST convention.
+
+## Authentication
+
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+
+Signup creates a visitor account. Login returns a JWT and establishes the browser session. Logout clears the browser session appropriately. `/me` returns only safe user information.
+
+## Public Events
+
+- `GET /api/events`
+- `GET /api/events/[id]`
+
+The listing endpoint supports category, city, text search, page, and page size.
+
+Only active, upcoming events are returned from the public listing.
+
+The event-detail endpoint must not accidentally disclose inactive or unauthorized administrative records.
+
+## Admin Events
+
+- `GET /api/admin/events`
+- `POST /api/admin/events`
+- `PATCH /api/admin/events/[id]`
+
+Admin event listing may include past and inactive events. Creating and updating an event require admin authorization.
+
+Use `PATCH` to update the active/inactive state and other permitted event fields. Never implement event deletion.
+
+## Favourite Categories and Feed
+
+- `GET /api/favourites`
+- `PUT /api/favourites`
+- `GET /api/feed`
+
+Persist favourite categories for the authenticated visitor.
+
+The feed contains only upcoming, active events whose categories match the user's saved favourites. Return a friendly empty result when no matches exist.
+
+## Reminders
+
+- `GET /api/reminders`
+- `PUT /api/events/[id]/reminder`
+- `DELETE /api/events/[id]/reminder`
+
+Require authentication. Make the create/remove operations idempotent. Do not allow reminders for nonexistent or ineligible events. If the user removes a reminder, the operation must persist across refreshes.
+
+## Event Card Design
+
+- `GET /api/events/[id]/card-design`
+- `PUT /api/events/[id]/card-design`
+
+Require authentication. Persist the selected theme and stickers for that user/event pair.
+
+Validate the theme against exactly three allowed theme identifiers, validate stickers against exactly five allowed sticker identifiers, reject more than three stickers, and reject duplicate stickers unless duplicates are deliberately supported and documented.
+
+Return the saved design so the client can reconcile its state.
+
+Never accept `userId` from the request body as the authority for ownership. Derive the current user from the verified session.
+
+Document all implemented endpoints and response examples in the README or an API reference document.
+
+# 8. EVENT FILTERING, SORTING AND PAGINATION
+
+Implement filtering in PostgreSQL through Prisma queries—not by fetching every event and filtering in JavaScript.
+
+The public events endpoint must combine all supplied filters using AND semantics.
+
+For example:
+
+`category=MUSIC&city=Coimbatore&search=night&page=1&pageSize=9`
+
+must return only active, upcoming events that match the category, city, and search term.
+
+Requirements:
+
+- Filter by category.
+- Filter by city.
+- Search relevant event text, including title and optionally description/city.
+- Normalize city input consistently.
+- Use case-insensitive text matching where supported.
+- Sort by event start time ascending, nearest upcoming event first.
+- Exclude past events using a consistent server-side timestamp.
+- Apply pagination after filters.
+- Return pagination metadata, including current page and total matching results.
+- Enforce a reasonable maximum page size.
+- Validate and normalize all query parameters.
+
+Do not interpolate untrusted input into raw SQL.
+
+Add an appropriate composite B-tree index for the common active/upcoming listing and sorting query, considering fields such as `isActive` and `startsAt`. Evaluate a category-plus-date index based on the actual Prisma query plan and access pattern.
+
+Document that ordinary B-tree indexes do not efficiently solve arbitrary substring search. If using PostgreSQL `ILIKE '%term%'`, consider `pg_trgm` with GIN/GiST indexes only if supported and practical in the chosen migration setup. Do not claim that a B-tree index accelerates leading-wildcard substring searches.
+
+Keep the implementation proportional to the assessment.
+
+# 9. ADMIN EVENT VALIDATION
+
+Validate event input on the server using Zod, even if the browser validates the same fields.
+
+Required fields:
+
+- Title.
+- Category.
+- City.
+- Date and time.
+- Price.
+- Description.
+
+Image URL may be optional, but if provided it must be a valid, acceptable HTTP/HTTPS URL.
+
+Enforce reasonable field-length limits, nonnegative prices, valid dates, and allowed categories.
+
+Reject malformed JSON and invalid enum values. Handle missing events and conflicting updates gracefully.
+
+Render prices in Indian currency format, for example `₹1,50,000`, using `Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 })` or an appropriate equivalent.
+
+Render event dates in a friendly format, for example `Sat, 18 Oct, 6:30 PM`, using a consistent timezone and locale policy.
+
+Never treat the client-provided date, price, category, or active status as trusted.
+
+# 10. REMINDER OPTIMISTIC UI
+
+The reminder button must update immediately on interaction.
+
+Implementation requirements:
+
+1. Read the initial reminder state from the API or server-provided data.
+2. Apply the optimistic state update.
+3. Send the request to the application's JSON API.
+4. Reconcile state with the successful server response.
+5. If the request fails, restore the previous state and show a clear error message.
+6. Prevent conflicting repeated operations while an individual request is pending.
+7. Ensure a refresh restores the persisted state.
+
+The UI must not silently imply that an unsuccessful reminder was saved.
+
+# 11. EVENT CARD DESIGNER
+
+Implement three background themes and five predefined stickers using emoji or small SVG assets.
+
+Use a typed allowlist for theme and sticker IDs.
+
+The designer must:
+
+- Display a live preview.
+- Add a selected sticker.
+- Enforce a maximum of three stickers.
+- Provide a remove action for each selected sticker.
+- Animate changes subtly and respect reduced-motion preferences.
+- Save the design for the current authenticated user and event.
+- Load the saved design after refresh.
+- Show saving, saved, and error states.
+- Roll back or reconcile local state when the API fails.
+
+Prevent XSS. Treat descriptions and other user-controlled text as text, not HTML. Do not render user-provided HTML or arbitrary SVG markup.
+
+The preview must be responsive and visually stable on mobile and desktop.
+
+# 12. APPLICATION PAGES
+
+Implement these routes using the established UI design system:
+
+- `/` or `/events` — public event discovery.
+- `/login` — visitor login.
+- `/signup` — visitor signup.
+- `/onboarding/favourites` — favourite-category selection.
+- `/feed` — personalized feed.
+- `/events/[id]` — event details and card designer.
+- `/admin/login` — administrator login.
+- `/admin/events` — event management.
+- `/admin/events/new` — create event.
+- `/admin/events/[id]/edit` — update event.
+
+Adapt routes if the existing repository already has a sensible structure.
+
+Ensure protected pages check authentication server-side and that APIs independently enforce authorization.
+
+A visitor must not be able to access admin pages or admin data by navigating directly to a URL.
+
+A signed-in non-admin must not be able to modify admin data through manually constructed HTTP requests.
+
+Unauthenticated visitors should be directed to login when they attempt protected user experiences.
+
+# 13. DESIGN AND RESPONSIVENESS
+
+Use the established UI design system from Prompt 1. If no design-system implementation exists, create it before building the remaining pages.
+
+Do not create a new theme independently for each screen.
+
+Maintain the same:
+
+- Semantic color tokens.
+- Typography.
+- Spacing scale.
+- Buttons and form controls.
+- Card patterns.
+- Borders and radii.
+- Loading skeletons.
+- Empty and error states.
+- Accessible focus and keyboard patterns.
+
+Verify layouts at 320, 375, 390, 768, 1024, and 1440 pixels where practical.
+
+The application must not have horizontal page overflow, overlapping controls, clipped dialogs, or broken event-card previews.
+
+All pages must support loading, empty, and error states where relevant. Avoid blank screens, silent failures, fake success notifications, and dead controls.
+
+# 14. SAMPLE DATA
+
+Create a reproducible database seed containing at least 15 distinct events.
+
+The sample data must include:
+
+- All five categories.
+- Multiple cities, including Coimbatore.
+- Different prices, including free and paid events.
+- Past and upcoming dates.
+- Both active and inactive records.
+- Different titles and descriptions suitable for text-search testing.
+- Valid image URLs where available, with graceful fallback when images fail.
+
+Use deterministic sample data and avoid relying on the current date remaining fixed.
+
+Use dates relative to the seed execution time where necessary so that both past and upcoming examples remain meaningful.
+
+Ensure at least one realistic test case exists for category + city + text filtering, an inactive event, and a past event.
+
+Do not insert sample users with weak passwords or committed production credentials.
+
+# 15. SECURITY BASELINE
+
+Treat this as a real application with a small attack surface.
+
+Required practices:
+
+- Server-side authentication and authorization on every protected API.
+- Zod validation for request bodies, parameters, and query strings.
+- Parameterized database access through Prisma.
+- Password hashing; never plaintext passwords.
+- Secure JWT configuration and verification.
+- HttpOnly session cookies for browser authentication.
+- CSRF mitigation for cookie-authenticated mutations.
+- Least-privilege data exposure and explicit response DTOs.
+- No secrets in source control or browser bundles.
+- No direct database access from client code.
+- Safe rendering of untrusted text.
+- Safe URL validation for event images.
+- Appropriate error responses without stack traces or sensitive details.
+- Rate limiting or a clearly documented mitigation for authentication endpoints.
+- No open CORS policy unless explicitly required; same-origin API access is the default.
+- Safe environment-variable handling and a committed `.env.example` containing placeholders only.
+- Dependency review and avoidance of unnecessary packages.
+
+If an API supports bearer authentication for mobile clients, validate it explicitly. Never assume a client-supplied role, user ID, or token claim is trustworthy without verification.
+
+Do not rely solely on middleware, button visibility, client-side redirects, or hidden form fields for authorization.
+
+Avoid unnecessary security complexity that cannot be maintained or explained.
+
+# 16. TESTING AND QUALITY GATES
+
+Write meaningful automated tests for the highest-risk behaviors.
+
+At minimum, cover:
+
+- Password hashing and verification.
+- JWT validation and expiration.
+- Unauthenticated access to protected APIs.
+- Non-admin access to admin APIs.
+- Event input validation.
+- Combined event filtering and sorting.
+- Exclusion of inactive and past events from public listings.
+- Favourite-category persistence and personalized feed behavior.
+- Reminder persistence and idempotency.
+- Card-design validation, including the three-sticker limit.
+- Error handling for failed API operations where practical.
+
+Use isolated test data and do not depend on a production database.
+
+Run:
+
+- TypeScript checks.
+- Linting.
+- Unit/integration tests.
+- Production build.
+- Critical browser flows if Playwright can be configured within scope.
+
+Fix errors caused by your changes. Do not disable lint rules, loosen TypeScript, skip failing tests, or claim a passing build without actually running it.
+
+If a check cannot be run because a database, browser, package, or external dependency is unavailable, report the exact blocker and provide the reproducible command.
+
+# 17. PHASED AGENT WORKFLOW
+
+Execute the following phases in order. Keep each phase small enough to review.
+
+## Phase 0 — Repository reconnaissance and planning
+
+- Inspect the current repository, package manager, dependencies, Git status, existing routes, and remote configuration.
+- Identify existing design-system work from Prompt 1.
+- Preserve useful existing code.
+- Create `docs/implementation-plan.md` with phases, acceptance criteria, risks, and intended commit sequence.
+- Identify required environment variables.
+- Do not overwrite user changes or reset the repository.
+
+Commit the plan if appropriate.
+
+## Phase 1 — Foundation and design-system integration
+
+- Configure the compatible Next.js, TypeScript, Tailwind, shadcn/ui, Prisma, and test setup.
+- Establish shared layout, tokens, reusable components, and formatting utilities.
+- Create environment validation and a singleton Prisma client.
+- Ensure `.gitignore` excludes `.env`, local databases, secrets, build artifacts, and dependency folders.
+- Verify the application starts and passes the available static checks.
+
+Commit the completed foundation.
+
+## Phase 2 — Database and sample data
+
+- Implement the Prisma schema and migrations.
+- Add constraints and indexes.
+- Implement the deterministic seed with at least 15 events.
+- Document how to provision PostgreSQL and run migrations.
+- Validate the seeded data.
+
+Commit the database phase.
+
+## Phase 3 — Authentication and authorization
+
+- Implement signup, login, logout, `/me`, password hashing, JWT handling, browser cookies, and server-side access guards.
+- Provision the admin using environment-based credentials.
+- Protect all admin API routes and protected pages.
+- Add focused security tests.
+
+Commit the authentication phase only after the core tests pass.
+
+## Phase 4 — Event APIs and admin UI
+
+- Implement public event listing, combined filters, sorting, pagination, and event details.
+- Implement admin listing, create, update, and active/inactive status management.
+- Integrate the shared responsive UI.
+- Test that inactive and past events do not leak into the public list.
+- Verify that event deletion is not available.
+
+Commit the event-management phase.
+
+## Phase 5 — Visitor features
+
+- Implement favourites and the personalized feed.
+- Implement persistent reminder APIs and optimistic rollback.
+- Implement the event-card designer with saved themes and stickers.
+- Integrate loading, empty, success, and failure states.
+- Test persistence across refresh and authorization boundaries.
+
+Commit the visitor-features phase.
+
+## Phase 6 — End-to-end integration and hardening
+
+- Test all flows through the application's own JSON API.
+- Run TypeScript, lint, tests, and production build.
+- Inspect responsive layouts.
+- Review authentication, authorization, input validation, error responses, and accidental data exposure.
+- Remove temporary mocks, dead code, debug logs, and unused dependencies.
+- Fix regressions before proceeding.
+
+Commit the quality and integration phase.
+
+## Phase 7 — Documentation and submission
+
+Create and verify the following deliverables:
+
+1. A complete README with setup instructions that can be followed in under five minutes, provided PostgreSQL is available or a straightforward local setup is documented.
+2. `.env.example` with placeholders and no secrets.
+3. Database migration and seed instructions.
+4. Admin login instructions explaining how to provision credentials safely.
+5. A concise API endpoint reference.
+6. Test and build commands.
+7. AI-tool usage disclosure describing what AI assisted with and what was verified.
+8. A list of limitations or unfinished work, if any.
+9. A dedicated `docs/interviewer-guide.md` explaining the architecture and likely interview questions.
+10. A three-to-four-minute screen-recording checklist or script demonstrating mobile and laptop views.
+
+Verify that all four company submission requirements are addressed: GitHub repository, README, recording instructions, and the three short database/filtering/security answers.
+
+Commit the documentation phase.
+
+# 18. GIT AND GITHUB RULES
+
+Commit regularly at the end of each meaningful phase. Use clear conventional commit messages, for example:
+
+- `chore: initialize application foundation`
+- `feat: add PostgreSQL event schema and seed data`
+- `feat: implement authentication and authorization`
+- `feat: implement event APIs and admin management`
+- `feat: add personalized feed and reminders`
+- `feat: persist event card designs`
+- `test: add security and API coverage`
+- `docs: add setup and interviewer guide`
+
+Inspect `git status` before each commit. Stage only intended files.
+
+Never commit `.env`, credentials, tokens, private keys, local database files, or unrelated user changes.
+
+Inspect the configured Git remote before pushing. If the repository and authentication are available, push each completed phase to the intended branch, preserving existing work.
+
+If GitHub access is missing, do not invent a successful push or repository URL. Finish local commits, state the exact blocker, and provide the commands required to configure the remote and push safely.
+
+Never force-push, rewrite shared history, discard user changes, or commit directly to an unexpected branch without checking repository conventions.
+
+# 19. REQUIRED README ANSWERS
+
+Include these three short answers in the README. Keep each answer approximately three to four lines and ensure it matches the actual implementation.
+
+## A. Database structure and design
+
+Explain the User, Event, FavouriteCategory, EventReminder, and EventCardDesign relationships. Explain why relational tables, unique constraints, and foreign keys suit the data and how they prevent duplicate preferences or reminders.
+
+## B. Filter query and index
+
+Explain how category, city, and text search are combined using AND conditions in PostgreSQL, followed by upcoming-event filtering, date sorting, and pagination. Identify the actual indexes created and distinguish ordinary B-tree indexes from indexes appropriate for substring search.
+
+## C. Password storage and access protection
+
+Explain password hashing, JWT signing and verification, browser session cookies, and server-side authorization on admin pages and every protected admin API. Explain why client-side route hiding alone is insufficient.
+
+Do not use generic security claims that are not supported by the code.
+
+# 20. INTERVIEWER GUIDE
+
+Create `docs/interviewer-guide.md` as a separate practical document for the candidate.
+
+Write in straightforward engineering language, not marketing language. Keep every explanation consistent with the code actually implemented.
+
+Include:
+
+1. Project overview and the problem being solved.
+2. Architecture diagram using Mermaid.
+3. Folder structure and responsibility of major modules.
+4. Database schema and relationships.
+5. Example Prisma queries for combined filtering, upcoming events, and personalized feeds.
+6. Explanation of pagination, sorting, and indexing trade-offs.
+7. Signup/login flow, password hashing, JWT validation, and browser cookie handling.
+8. How admin authorization is enforced on the server and why middleware alone is insufficient.
+9. Reminder optimistic updates, persistence, and rollback on failure.
+10. Card-design persistence and the three-sticker validation rule.
+11. Loading, empty, error, and responsive UI decisions.
+12. Testing strategy and important edge cases.
+13. Environment variables, local setup, migrations, seeding, and common troubleshooting.
+14. Security limitations and reasonable next improvements.
+15. A concise list of likely interviewer questions with honest, code-specific answers.
+
+For every major technical choice, explain:
+- What was chosen.
+- Why it was chosen.
+- What alternative was considered.
+- What trade-off was accepted.
+
+Do not invent performance metrics, claim production traffic, or suggest that unimplemented functionality exists.
+
+Include a clear AI usage disclosure and a note that the candidate reviewed and validated the implementation.
+
+# 21. RECORDING CHECKLIST
+
+Prepare a concise three-to-four-minute recording script.
+
+Suggested sequence:
+
+- 0:00–0:30 — Introduce the app and demonstrate the public events page on a phone-size viewport.
+- 0:30–1:15 — Demonstrate combined category, city, and text filters, pagination, and date sorting.
+- 1:15–2:00 — Demonstrate signup/login, favourites, My Feed, and reminder persistence.
+- 2:00–2:30 — Demonstrate the card designer, switching themes, adding/removing stickers, and persistence.
+- 2:30–3:00 — Demonstrate admin login, creating or editing an event, and changing its active status.
+- 3:00–3:45 — Show the laptop layout and explain two or three meaningful implementation decisions.
+
+Adjust the timing to the final implementation. Do not script claims about features that are missing or not verified.
+
+The agent should produce the script and checklist; the candidate will record the actual application and submit the recording link.
+
+# 22. FINAL ACCEPTANCE CHECKLIST
+
+Before declaring completion, verify each item against the actual repository.
+
+- [ ] Next.js App Router and TypeScript are used.
+- [ ] PostgreSQL and Prisma migrations work.
+- [ ] At least 15 seeded events cover past/upcoming, active/inactive, categories, cities, and prices.
+- [ ] Admin login works and admin pages and APIs are protected server-side.
+- [ ] Admin can create and update events, including active/inactive status, without deleting them.
+- [ ] Public events show only active, upcoming events sorted nearest first.
+- [ ] Category, city, text search, and pagination work together.
+- [ ] Signup and login work with a signed JWT.
+- [ ] Passwords are securely hashed.
+- [ ] Favourite categories persist.
+- [ ] My Feed shows upcoming active events matching saved categories.
+- [ ] Reminders persist, update immediately, and roll back with an error message on failure.
+- [ ] Card themes and stickers persist per user and event, with a maximum of three stickers.
+- [ ] Every required feature uses the application's own JSON APIs.
+- [ ] UI is consistent, responsive, accessible, and usable on mobile and laptop.
+- [ ] Loading, empty, and error states are present.
+- [ ] README includes all setup instructions and three short required answers.
+- [ ] `docs/interviewer-guide.md` exists and matches the implementation.
+- [ ] AI usage is disclosed.
+- [ ] Git commits exist for meaningful phases.
+- [ ] GitHub push status is verified rather than assumed.
+- [ ] Lint, type checks, tests, and production build results are reported accurately.
+- [ ] Recording checklist is ready for the candidate to execute.
+
+# 23. EXECUTION RULES
+
+Begin by inspecting the repository and checking whether Prompt 1's UI foundation already exists.
+
+Do not stop after producing a plan. Execute the phases in order, run checks after meaningful changes, and preserve working code.
+
+Do not introduce features outside the assignment. Do not fabricate test results, credentials, commits, pushes, recording links, or completion status.
+
+When blocked by an unavailable database, dependency, or GitHub credential, make the maximum safe progress, isolate the blocker, and document the exact action needed to proceed.
+
+At the end, report:
+
+- What was implemented.
+- The actual commands and test results.
+- The commit hashes and push status.
+- The local setup command sequence.
+- Any remaining limitations.
+- The exact path to the interviewer guide and recording checklist.
+
+**Success means a complete, explainable, testable submission—not simply a large amount of generated code.**

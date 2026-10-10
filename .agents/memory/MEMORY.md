@@ -1,0 +1,1 @@
+- [Phased delivery](phased-delivery.md) — Plan first; separate verified phase commits and daily GitHub pushes, not a bulk assessment commit.
