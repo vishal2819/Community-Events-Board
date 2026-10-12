@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: ["*.replit.dev", "*.replit.app"],
+  // The browser suite points this at its own directory so it can run alongside a
+  // development server without colliding on the dev lock or build output.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   experimental: { cpus: 2 },
   async headers() {
     return [{
