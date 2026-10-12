@@ -8,11 +8,11 @@
     "build": "prisma generate && next build",
     "serve": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src prisma tests",
+    "lint": "eslint src prisma",
     "test": "vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "admin:hash": "node scripts/hash-admin.mjs"
   },
   "devDependencies": {

@@ -17,11 +17,17 @@ export function FavouritesForm() {
   const save = useSaveFavourites();
   const [picked, setPicked] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const initial = useRef(false);
-  if (fav.data && !initial.current) { initial.current = true; if (picked === null) setPicked(fav.data.categories); }
-  const current = picked ?? [];
+  const initialized = useRef(false);
 
-  const toggle = (c: Category) => setPicked(current.includes(c) ? current.filter((x) => x !== c) : [...current, c]);
+  const current = picked ?? fav.data?.categories ?? [];
+
+  const toggle = (c: Category) => {
+    if (!initialized.current) {
+      initialized.current = true;
+      setPicked(current);
+    }
+    setPicked(current.includes(c) ? current.filter((x) => x !== c) : [...current, c]);
+  };
 
   const onSave = () => {
     setError(null);

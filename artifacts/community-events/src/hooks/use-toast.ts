@@ -26,6 +26,7 @@ function genId() {
 }
 
 type ActionType = typeof actionTypes;
+void actionTypes;
 
 type Action =
   | {

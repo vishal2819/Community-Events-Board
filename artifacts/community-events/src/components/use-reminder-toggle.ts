@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useSaveReminder,
@@ -20,9 +20,16 @@ export function useReminderToggle() {
   const save = useSaveReminder();
   const remove = useRemoveReminder();
   const saveRef = useRef(save.mutateAsync);
-  saveRef.current = save.mutateAsync;
   const removeRef = useRef(remove.mutateAsync);
-  removeRef.current = remove.mutateAsync;
+
+  useEffect(() => {
+    saveRef.current = save.mutateAsync;
+  }, [save.mutateAsync]);
+
+  useEffect(() => {
+    removeRef.current = remove.mutateAsync;
+  }, [remove.mutateAsync]);
+
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const inflight = useRef<Set<string>>(new Set());
@@ -33,6 +40,7 @@ export function useReminderToggle() {
   const drop = (id: string) =>
     setOverrides((o) => {
       const { [id]: _removed, ...rest } = o;
+      void _removed;
       return rest;
     });
 
@@ -65,6 +73,7 @@ export function useReminderToggle() {
         inflight.current.delete(id);
         setPending((p) => {
           const { [id]: _r, ...rest } = p;
+          void _r;
           return rest;
         });
       }

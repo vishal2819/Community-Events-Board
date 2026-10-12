@@ -48,7 +48,8 @@ export async function getEvent(id: string, admin = false, userId?: string) {
   return { data: eventDto(event, !!reminder) };
 }
 export async function createEvent(input: z.infer<typeof eventInputSchema>) {
-  return { data: eventDto(await db.event.create({ data: { ...input, startsAt: new Date(input.startsAt), price: new Prisma.Decimal(input.price) } })) };
+  const { isActive = true, startsAt, price, ...rest } = input;
+  return { data: eventDto(await db.event.create({ data: { ...rest, isActive, startsAt: new Date(startsAt), price: new Prisma.Decimal(price) } })) };
 }
 export async function updateEvent(id: string, input: z.infer<typeof eventUpdateSchema>) {
   const { updatedAt, startsAt, price, ...fields } = input;
@@ -70,8 +71,8 @@ export async function eventMeta() {
   const where: Prisma.EventWhereInput = { isActive: true, startsAt: { gt: new Date() } };
   const [cities, categories, total] = await db.$transaction([
     db.event.findMany({ where, distinct: ["city"], select: { city: true }, orderBy: { city: "asc" } }),
-    db.event.groupBy({ by: ["category"], where, _count: { _all: true } }),
+    db.event.groupBy({ by: ["category"], where, _count: true, orderBy: { category: "asc" } }),
     db.event.count({ where }),
   ]);
-  return { data: { cities: cities.map(item => item.city), categories: categories.map(item => ({ category: item.category, count: item._count._all })), total } };
+  return { data: { cities: cities.map(item => item.city), categories: categories.map(item => ({ category: item.category, count: item._count })), total } };
 }

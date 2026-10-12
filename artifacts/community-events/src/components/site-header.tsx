@@ -25,7 +25,7 @@ export function SiteHeader() {
     ...(user ? [{ label: "My Feed", href: "/feed" }, { label: "Favourites", href: "/onboarding/favourites" }] : []),
     ...(user?.role === "ADMIN" ? [{ label: "Admin", href: "/admin/events" }] : []),
   ];
-  const active = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const active = (href: string) => (href === "/" ? pathname === "/" : pathname?.startsWith(href) ?? false);
 
   const signOut = () =>
     logout.mutate(undefined, {

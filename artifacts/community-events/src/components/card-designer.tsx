@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RotateCcw, Save, Check } from "lucide-react";
@@ -49,12 +49,14 @@ export function CardDesigner({ event, signedIn }: { event: CivicEvent; signedIn:
   const [justSaved, setJustSaved] = useState(false);
   const initFor = useRef<string | null>(null);
 
-  if (q.data && initFor.current !== event.id) {
-    initFor.current = event.id;
-    setTheme(q.data.theme);
-    setStickers(q.data.stickers);
-    setSaved({ theme: q.data.theme, stickers: q.data.stickers });
-  }
+  useEffect(() => {
+    if (q.data && initFor.current !== event.id) {
+      initFor.current = event.id;
+      setTheme(q.data.theme);
+      setStickers(q.data.stickers);
+      setSaved({ theme: q.data.theme, stickers: q.data.stickers });
+    }
+  }, [q.data, event.id]);
 
   if (!signedIn) {
     return (
