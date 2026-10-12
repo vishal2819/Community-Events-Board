@@ -53,13 +53,11 @@ docker run -d --name civic-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=civic
 cp artifacts/community-events/.env.example artifacts/community-events/.env
 ```
 
-Then edit `artifacts/community-events/.env`:
+Put the database and signing secret in `.env`:
 
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/civic"
 JWT_SECRET="<at least 32 cryptographically random bytes>"
-ADMIN_EMAIL="admin@example.com"
-ADMIN_PASSWORD_HASH="<bcrypt cost-12 hash>"
 ```
 
 Generate `JWT_SECRET` with:
@@ -68,14 +66,32 @@ Generate `JWT_SECRET` with:
 node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Generate `ADMIN_PASSWORD_HASH` with the interactive helper, which hides the input:
+**Admin credentials must not go in `.env`.** A bcrypt hash starts with `$2b$12$`, and
+Next.js expands `$name` references while loading `.env`. In this project that silently
+stripped the `$2b$12$` prefix, leaving a value the server rejects, so every admin login
+returned `503 ADMIN_CONFIG`. Quoting does not help, and escaping with `\$` does not
+either, because the backslashes survive loading.
+
+Generate the hash with the interactive helper, which hides the input:
 
 ```bash
 cd artifacts/community-events && pnpm admin:hash
 ```
 
-Paste the printed hash into `.env`. Never commit a plaintext password or a real
-production secret.
+Then export it into the environment that starts the app:
+
+```bash
+# bash
+export ADMIN_EMAIL='admin@example.com'
+export ADMIN_PASSWORD_HASH='$2b$12$...'
+
+# PowerShell
+$env:ADMIN_EMAIL='admin@example.com'
+$env:ADMIN_PASSWORD_HASH='$2b$12$...'
+```
+
+Admin access stays disabled while either variable is unset. Never commit a plaintext
+password or a real production secret.
 
 **4. Create the schema and seed data**
 
@@ -111,8 +127,11 @@ Run app commands from `artifacts/community-events`, workspace commands from the 
 | `pnpm db:migrate` | Apply migrations (`migrate deploy`) |
 | `pnpm db:seed` | Seed events, safe to re-run |
 | `pnpm admin:hash` | Interactive bcrypt hash for the admin account |
-| `pnpm lint` | ESLint over `src`, `prisma` and `tests` |
+| `pnpm lint` | ESLint over `src`, `prisma`, `tests` and `e2e` |
 | `pnpm test` | Vitest unit suite |
+| `pnpm test:e2e` | Playwright browser suite |
+| `pnpm test:e2e:ui` | Playwright in interactive UI mode |
+| `pnpm test:all` | Unit tests, then browser tests |
 | `pnpm typecheck` | `tsc --noEmit` |
 
 ### Workspace
@@ -128,7 +147,7 @@ Run app commands from `artifacts/community-events`, workspace commands from the 
 Run in this order before committing:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm test:e2e
 ```
 
 ---
@@ -173,16 +192,44 @@ Browsers authenticate with an `HttpOnly` cookie. API clients send
 
 ## Testing
 
+**Unit tests** — no database required:
+
 ```bash
 cd artifacts/community-events && pnpm test
 ```
 
-98 unit tests cover request validation, JWT issuing and verification, CSRF origin
-checks, rate limiting, event filter composition, DTO field exposure, and request body
-parsing limits. They need no database.
+109 tests cover request validation, password hashing, JWT issuing and verification,
+CSRF origin decisions, rate limiting, event filter composition, DTO field exposure, and
+request body parsing limits. Two assert directly on confidentiality: that the generic 500
+path never leaks internal error text or a connection string, and that no response DTO
+carries a password hash.
 
-Database-backed integration tests and browser end-to-end tests are not implemented. Do
-not claim they ran.
+**Browser tests** — Playwright against a real server and database:
+
+```bash
+cp artifacts/community-events/.env.e2e-admin.example artifacts/community-events/.env.e2e-admin
+# fill in ADMIN_EMAIL, ADMIN_PASSWORD_HASH (from pnpm admin:hash) and ADMIN_PASSWORD
+cd artifacts/community-events && pnpm test:e2e
+```
+
+89 tests across discovery, authentication, CSRF, visitor features, card design, admin
+management, authorization and responsive layouts. They run on port 3100 against a
+separate `civic_test` database, created, migrated and seeded automatically, so they never
+touch development data or a running dev server. PostgreSQL must be reachable at the URL
+in `E2E_DB_URL`, default `postgresql://postgres:postgres@localhost:5432/civic_test`.
+
+Admin credentials are read from `.env.e2e-admin` rather than `.env`, for the reason
+described under Setup.
+
+Edge cases covered include: inactive and past events absent from the public list, filters
+that cannot both match returning empty rather than ignoring one, reminder idempotency,
+the server rejecting a fourth sticker regardless of client state, a stale `updatedAt`
+returning `409`, tampered tokens being refused, and a visitor calling admin APIs getting
+`403`.
+
+Not implemented, and therefore not claimed: database-backed integration tests as a
+separate Vitest suite, and CI configuration. The browser suite exercises the real API,
+but it is not a substitute for a service-level integration suite at larger scale.
 
 ---
 
@@ -225,6 +272,78 @@ scripts                      Utility scripts
 The app talks to the database only through `artifacts/community-events/src/lib/db`. The
 unused `lib/db` and `artifacts/api-server` packages are workspace templates, not
 application code.
+
+## Further reading
+
+- [`docs/interviewer-guide.md`](docs/interviewer-guide.md) — architecture, trade-offs and
+  likely interview questions
+- [`docs/SUBMISSION.md`](docs/SUBMISSION.md) — submission summary and recording script
+- [`docs/implementation-plan.md`](docs/implementation-plan.md) — the original phased plan
+
+---
+
+## Design and security answers
+
+### A. Database structure and design
+
+Five normalised tables. `User` holds visitor accounts with a unique, lowercased `email`.
+`Event` is the catalogue, with `price` as `Decimal(10,2)` so currency never drifts, and
+`isActive` controlling public visibility. The remaining three are join tables:
+`FavouriteCategory`, `EventReminder` and `EventCardDesign`, each with a composite primary
+key of `(userId, category)` or `(userId, eventId)` and `onDelete: Cascade`.
+
+The composite keys are the important part: they make a duplicate preference or a
+duplicate reminder impossible in the database rather than merely unlikely in application
+code, so two concurrent requests cannot both succeed. Cascades clean up a deleted user's
+rows without a second query. Foreign keys guarantee a reminder always points at a real
+event and a real user. This is relational because every one of these is a relationship
+with its own attributes and an independent lifetime — there is nothing here worth
+denormalising for a dataset this size.
+
+### B. Filter query and index
+
+`publicWhere` in `src/lib/services/events.ts` builds one Prisma `where` object, so
+category, city and text search combine with AND semantics in SQL — never by fetching rows
+and filtering in JavaScript. It always adds `isActive: true` and `startsAt: { gt: now }`,
+so past and inactive events are excluded server-side using a single consistent timestamp.
+City uses `mode: "insensitive"`; search ORs `contains` across title, description and city.
+Pagination is applied after filtering via `skip`/`take`, ordered by `startsAt asc, id asc`
+— the `id` tiebreaker stops records shifting between pages.
+
+Indexes on `Event` are `(isActive, startsAt, id)`, which serves the default listing and its
+sort, and `(category, isActive, startsAt)` for a category filter.
+
+One honest caveat: the search uses `ILIKE '%term%'`, and a plain B-tree index does **not**
+accelerate a leading-wildcard substring match. `pg_trgm` with a GIN index would, and was
+left out deliberately to avoid an extra migration and extension dependency for a small
+dataset. This is the first change I would make at scale.
+
+### C. Password storage and access protection
+
+Passwords are hashed with `bcryptjs` at cost 12 and never stored, returned or logged in
+plaintext. Signup and login normalise the email and enforce a 10–72 **byte** password; the
+byte check matters because bcrypt ignores anything past 72 bytes, so a longer password is
+rejected rather than silently truncated. Login compares against a precomputed dummy hash
+when no account exists, so a missing account and a wrong password take comparable time and
+return the identical error.
+
+JWTs are signed HS256 with `jose`, carrying `sub`, `email`, `role`, `iss`, `aud`, `iat` and
+`exp`. Verification pins the algorithm, issuer and audience and requires every claim, so
+`alg: none` and algorithm substitution are refused. The token is returned in the login JSON
+body as the assessment requires, and an `HttpOnly`, `SameSite=Lax` cookie, `Secure` in
+production, is set for the browser. It is never written to `localStorage` or
+`sessionStorage`, and identity is re-derived from the verified token on **every** request
+rather than trusted from a decoded payload.
+
+Admin authorization is enforced inside each protected Route Handler through
+`requireAdmin`, never in a component or a middleware redirect. Hiding a link or redirecting
+in a layout changes nothing about what the API accepts — a signed-in visitor can always
+call `POST /api/admin/events` by hand, which the browser tests attempt and the server
+answers `403`. The admin is an environment-provisioned account with no database row, so
+unsetting `ADMIN_EMAIL` or `ADMIN_PASSWORD_HASH` disables it entirely.
+
+More detail, including the trade-offs behind each choice, is in
+[`docs/interviewer-guide.md`](docs/interviewer-guide.md).
 
 ---
 

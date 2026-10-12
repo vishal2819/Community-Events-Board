@@ -18,6 +18,8 @@ See the repository `README.md`. In short: `pnpm install`, start PostgreSQL, copy
 
 ## 3. Three short answers
 
+The same three answers appear in the README, which is where the assessment asks for them.
+
 **Why did you choose this architecture?**
 
 The brief required Prisma and Next.js, so those override the Express and Drizzle templates
@@ -41,12 +43,11 @@ attacker mint a fresh bucket per request. Peer bucketing is now opt-in behind
 
 **What did you cut for time, and what would you do next?**
 
-Browser end-to-end automation and database-backed integration tests are not implemented;
-the 98 unit tests cover server logic only, and that boundary should be stated plainly
-rather than papered over. Rate limiting is in-process, so it is correct for a single
-instance and wrong behind a load balancer. Next steps in order: end-to-end coverage of the
-signup-to-reminder journey, a shared rate-limit store, and a scheduled job to expire old
-reminders rather than filtering them out at read time.
+Rate limiting is in-process, so it is correct for a single instance and wrong behind a load
+balancer. Reminders are filtered at read time rather than expired by a job. There is no
+service-level integration suite or CI configuration, only unit tests and the Playwright
+browser suite. Next steps in order: a shared rate-limit store, an audit trail for admin
+edits, and database-backed integration tests alongside the browser suite.
 
 ## 4. Architecture and security tradeoffs
 
@@ -63,6 +64,13 @@ reminders rather than filtering them out at read time.
 | SQLite-free, PostgreSQL only | Brief requirement; better concurrency semantics | Heavier local setup than SQLite |
 
 ## 5. Interviewer guide
+
+The full guide is a separate document: [`docs/interviewer-guide.md`](interviewer-guide.md).
+It covers the architecture diagram, module responsibilities, schema and example queries,
+indexing trade-offs, the auth flows, authorization reasoning, optimistic updates, card
+design, testing strategy, setup and troubleshooting, limitations, and likely questions.
+
+A short version for a walkthrough:
 
 **Entry points**
 - `src/app/api/**/route.ts` — every API route
@@ -82,19 +90,22 @@ reminders rather than filtering them out at read time.
 5. `readJson` caps bodies at 16 KB before parsing. Why parse the raw text first?
 
 **Where to push back**
-- If someone claims the tests cover the API end to end, they do not. There is no
-  database-backed suite and no browser automation.
+- If someone claims service-level integration tests exist, they do not. There is a unit
+  suite and a Playwright browser suite, but no database-backed Vitest integration suite.
 - If someone proposes trusting `X-Forwarded-For`, ask how an attacker defeats it.
+- If someone says the admin hash can live in `.env`, ask what happens to the `$2b$12$`
+  prefix, and have them check the value the process actually receives.
 
 ## 6. AI disclosure
 
 This project was developed with AI assistance, used as a coding assistant for scaffolding,
 implementation, debugging and test authoring. The requirements, architecture decisions and
 tradeoffs were mine. Every change was reviewed, run and verified locally: `pnpm typecheck`,
-`pnpm lint`, `pnpm test` and `pnpm build` all pass, and the application was exercised
-against a local PostgreSQL instance.
+`pnpm lint`, `pnpm test`, `pnpm build` and `pnpm test:e2e` all pass, and the application was
+exercised against a local PostgreSQL instance.
 
-No browser end-to-end automation has been run, and no claims of such testing are made.
+Browser tests run against a real server and a real database. What is not implemented is a
+service-level integration suite and CI configuration, and no claim is made that either ran.
 
 ## 7. Recording script
 
@@ -116,7 +127,7 @@ No browser end-to-end automation has been run, and no claims of such testing are
 7. **Security, 90s** — Walk through `assertOrigin`, `identityFromToken`, `readJson` and the
    generic error path. Explicitly show the test that asserts a database error message never
    reaches the client.
-8. **Testing, 60s** — `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`. State the
-   boundary: unit tests only, no end-to-end automation, and what I would add next.
-9. **Close, 30s** — Name the two known limits: in-process rate limiting, and reminders
-   filtered at read time rather than expired by a job.
+8. **Laptop layout and decisions, 45s** — Explain JWT re-verification per request, the `id`
+   tiebreaker in the sort, and why rate limiting ignores forwarded IP headers.
+9. **Close, 20s** — Name the known limits: in-process rate limiting, reminders filtered at
+   read time rather than expired, and no `pg_trgm` index for substring search.
