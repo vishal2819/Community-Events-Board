@@ -8,7 +8,7 @@
     "build": "prisma generate && next build",
     "serve": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src prisma",
+    "lint": "eslint src prisma tests",
     "test": "vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

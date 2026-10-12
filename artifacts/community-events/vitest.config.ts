@@ -1,15 +1,21 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 
+const resolve = (relative: string) => path.resolve(import.meta.dirname, relative);
+
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    alias: [
+      { find: "@", replacement: resolve("src") },
+      // `server-only` is a build-time guard that throws outside a React Server
+      // Component. These suites exercise real server logic in isolation, so the
+      // guard is stubbed rather than removed from application code.
+      { find: "server-only", replacement: resolve("tests/stubs/server-only.ts") },
+    ],
   },
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    // Server-only modules import Next and Prisma internals that need no browser,
-    // but React Query hooks are not exercised here; unit scope is server logic only.
     globals: false,
   },
 });
