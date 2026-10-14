@@ -14,7 +14,9 @@ export default defineConfig([
   ]),
   {
     rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      // ignoreRestSiblings covers the omit-a-key idiom: the unused binding is the
+      // one being dropped from an object rest.
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", ignoreRestSiblings: true }],
     },
   },
 ]);

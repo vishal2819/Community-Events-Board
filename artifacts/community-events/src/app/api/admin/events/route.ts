@@ -11,6 +11,5 @@ export const GET = handler(async request => {
 export const POST = handler(async request => {
   assertOrigin(request);
   await requireAdmin(request);
-  const input = await readJson(request, eventInputSchema);
-  return json(await createEvent({ ...input, isActive: input.isActive ?? true }), 201);
+  return json(await createEvent(await readJson(request, eventInputSchema)), 201);
 });

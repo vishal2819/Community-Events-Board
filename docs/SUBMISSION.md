@@ -110,8 +110,8 @@ service-level integration suite and CI configuration, and no claim is made that 
 ## 7. Recording script
 
 1. **Intro, 20s** — "This is Civic, a community events board. Next.js 16 App Router,
-   PostgreSQL through Prisma, about four thousand lines. I'll show discovery, then auth,
-   then the admin path, then how it's tested."
+   PostgreSQL through Prisma. I'll show discovery, then auth, then the admin path, then
+   how it's tested."
 2. **Discovery, 60s** — Load `/`. Filter by category and city, page through results. Show
    `/api/events/meta` driving the filter UI in the network tab.
 3. **Auth, 60s** — Sign up. Show the `HttpOnly` cookie in devtools, then `/api/auth/me`.

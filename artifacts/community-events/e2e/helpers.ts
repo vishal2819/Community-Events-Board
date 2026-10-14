@@ -55,11 +55,6 @@ export async function signInAsAdmin(page: Page): Promise<void> {
   await page.getByTestId("button-submit").click();
 }
 
-/** Reads the session cookie, confirming HttpOnly is set on the browser side. */
-export async function sessionCookies(page: Page) {
-  return page.context().cookies();
-}
-
 /**
  * Confirms a visitor session exists. Checks `/api/auth/me` rather than a header
  * control, because the sign-out button is hidden at phone widths.
@@ -70,10 +65,4 @@ export async function expectSignedIn(page: Page): Promise<void> {
   const body = await response.json();
   expect(body.data, "session should resolve to a user").not.toBeNull();
   expect(body.data.role).toBe("USER");
-}
-
-export async function expectSignedOut(page: Page): Promise<void> {
-  const response = await page.request.get("/api/auth/me");
-  expect(response.status()).toBe(200);
-  expect((await response.json()).data).toBeNull();
 }

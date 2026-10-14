@@ -7,13 +7,8 @@ const MAX_TRACKED_BUCKETS = 10_000;
 const EMAIL_LIMIT = 10;
 const PEER_LIMIT = 40;
 
-/**
- * Client IPs are only used when a proxy header is explicitly trusted. Forwarded
- * headers are attacker-controlled by default, so treating them as identity would
- * let a caller mint a fresh rate-limit bucket per request and defeat the limit
- * entirely. Without this opt-in the per-account bucket below is the only
- * limiter, which is the property that actually protects stored credentials.
- */
+// Forwarded headers are caller-controlled, so the client IP is only read when a
+// trusted proxy header is named explicitly. Otherwise the email bucket is the limiter.
 function trustedPeer(request: Request): string | null {
   const header = process.env.AUTH_TRUSTED_IP_HEADER?.trim();
   if (!header) return null;

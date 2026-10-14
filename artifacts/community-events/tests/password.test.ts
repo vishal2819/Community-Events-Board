@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { PASSWORD_COST, hashPassword, verifyPassword } from "@/lib/auth/password";
 
 describe("password hashing", () => {
@@ -67,9 +67,4 @@ describe("bcrypt input limits", () => {
     const hash = await hashPassword(password);
     await expect(verifyPassword(password, hash)).resolves.toBe(true);
   });
-});
-
-afterEach(() => {
-  // Keep the module import honest about not relying on ambient state.
-  expect(typeof PASSWORD_COST).toBe("number");
 });

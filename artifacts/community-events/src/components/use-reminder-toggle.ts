@@ -40,7 +40,6 @@ export function useReminderToggle() {
   const drop = (id: string) =>
     setOverrides((o) => {
       const { [id]: _removed, ...rest } = o;
-      void _removed;
       return rest;
     });
 
@@ -73,7 +72,6 @@ export function useReminderToggle() {
         inflight.current.delete(id);
         setPending((p) => {
           const { [id]: _r, ...rest } = p;
-          void _r;
           return rest;
         });
       }

@@ -53,7 +53,7 @@ Thumbs.db
 !.env.e2e-admin.example
 .next/
 .next-e2e*/
-.generated-artifacts/
+/generated-artifacts/
 
 # Playwright
 **/e2e/.runtime/

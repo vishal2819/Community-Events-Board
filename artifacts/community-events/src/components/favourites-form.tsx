@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
@@ -17,17 +17,10 @@ export function FavouritesForm() {
   const save = useSaveFavourites();
   const [picked, setPicked] = useState<Category[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const initialized = useRef(false);
 
   const current = picked ?? fav.data?.categories ?? [];
 
-  const toggle = (c: Category) => {
-    if (!initialized.current) {
-      initialized.current = true;
-      setPicked(current);
-    }
-    setPicked(current.includes(c) ? current.filter((x) => x !== c) : [...current, c]);
-  };
+  const toggle = (c: Category) => setPicked(current.includes(c) ? current.filter((x) => x !== c) : [...current, c]);
 
   const onSave = () => {
     setError(null);

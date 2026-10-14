@@ -47,7 +47,7 @@ export async function getEvent(id: string, admin = false, userId?: string) {
   const reminder = userId ? await db.eventReminder.findUnique({ where: { userId_eventId: { userId, eventId: id } } }) : null;
   return { data: eventDto(event, !!reminder) };
 }
-export async function createEvent(input: z.infer<typeof eventInputSchema>) {
+export async function createEvent(input: z.input<typeof eventInputSchema>) {
   const { isActive = true, startsAt, price, ...rest } = input;
   return { data: eventDto(await db.event.create({ data: { ...rest, isActive, startsAt: new Date(startsAt), price: new Prisma.Decimal(price) } })) };
 }
